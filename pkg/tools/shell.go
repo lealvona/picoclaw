@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -94,9 +96,13 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) *To
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(cmdCtx, "powershell", "-NoProfile", "-NonInteractive", "-Command", command)
+		cmd = exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", command)
 	} else {
-		cmd = exec.CommandContext(cmdCtx, "sh", "-c", command)
+		cmd = exec.Command("sh", "-c", command)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+			Pgid:    0,
+		}
 	}
 	if cwd != "" {
 		cmd.Dir = cwd
@@ -106,7 +112,39 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) *To
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	err := cmd.Start()
+	if err != nil {
+		output := stdout.String()
+		if stderr.Len() > 0 {
+			output += "\nSTDERR:\n" + stderr.String()
+		}
+		output += fmt.Sprintf("\nFailed to start command: %v", err)
+		return &ToolResult{
+			ForLLM:  output,
+			ForUser: output,
+			IsError: true,
+		}
+	}
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
+	}()
+
+	select {
+	case <-cmdCtx.Done():
+		if cmd.Process != nil {
+			if runtime.GOOS == "windows" {
+				exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(cmd.Process.Pid)).Run()
+			} else {
+				syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
+		}
+		<-waitDone
+		err = cmdCtx.Err()
+	case err = <-waitDone:
+	}
+
 	output := stdout.String()
 	if stderr.Len() > 0 {
 		output += "\nSTDERR:\n" + stderr.String()
