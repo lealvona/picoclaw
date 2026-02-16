@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -28,17 +30,41 @@ type HTTPProvider struct {
 }
 
 func NewHTTPProvider(apiKey, apiBase, proxy string) *HTTPProvider {
-	client := &http.Client{
-		Timeout: 120 * time.Second,
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  false,
+		ForceAttemptHTTP2:  true,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Resolver: &net.Resolver{
+				PreferGo: true,
+				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+					d := net.Dialer{
+						Timeout:   10 * time.Second,
+						KeepAlive: 30 * time.Second,
+					}
+					return d.DialContext(ctx, network, address)
+				},
+			},
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 
 	if proxy != "" {
 		proxyURL, err := url.Parse(proxy)
 		if err == nil {
-			client.Transport = &http.Transport{
-				Proxy: http.ProxyURL(proxyURL),
-			}
+			transport.Proxy = http.ProxyURL(proxyURL)
 		}
+	}
+
+	client := &http.Client{
+		Timeout:   120 * time.Second,
+		Transport: transport,
 	}
 
 	return &HTTPProvider{
@@ -105,13 +131,30 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
 
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+	var resp *http.Response
+	var body []byte
+	var err error
+
+	maxRetries := 3
+	retryDelay := 1 * time.Second
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		resp, err = p.httpClient.Do(req)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				logger.Printf("Request failed (attempt %d/%d): %v, retrying in %v...", attempt+1, maxRetries, err, retryDelay)
+				time.Sleep(retryDelay)
+				retryDelay *= 2
+				continue
+			}
+			return nil, fmt.Errorf("failed to send request after %d attempts: %w", maxRetries, err)
+		}
+		break
 	}
+
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
