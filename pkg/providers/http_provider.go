@@ -371,7 +371,7 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 				apiBase = customCfg.APIBase
 				proxy = customCfg.Proxy
 				if apiBase == "" {
-					apiBase = "https://api.minimax.chat/v1"
+					apiBase = "https://api.minimax.io/v1"
 				}
 			} else {
 				apiKey = cfg.Providers.Minimax.APIKey
@@ -379,7 +379,7 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 				if cfg.Providers.Minimax.APIBase != "" {
 					apiBase = cfg.Providers.Minimax.APIBase
 				} else {
-					apiBase = "https://api.minimax.chat/v1"
+					apiBase = "https://api.minimax.io/v1"
 				}
 			}
 

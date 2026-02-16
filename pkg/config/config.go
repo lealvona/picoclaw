@@ -361,7 +361,7 @@ func DefaultConfig() *Config {
 			},
 			"minimax": {
 				APIKey:        "YOUR_MINIMAX_API_KEY",
-				APIBase:       "https://api.minimax.chat/v1",
+				APIBase:       "https://api.minimax.io/v1",
 				ContextWindow:  24576,
 				MaxOutputTokens: 8192,
 				DefaultModel:  "minimax-2.5",

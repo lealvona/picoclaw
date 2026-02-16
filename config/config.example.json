@@ -110,7 +110,7 @@
     },
     "minimax": {
       "api_key": "YOUR_MINIMAX_API_KEY",
-      "api_base": "https://api.minimax.chat/v1"
+      "api_base": "https://api.minimax.io/v1"
     },
     "ollama": {
        "api_key": "",
