@@ -166,21 +166,32 @@ type DevicesConfig struct {
 	MonitorUSB bool `json:"monitor_usb" env:"PICOCLAW_DEVICES_MONITOR_USB"`
 }
 
+type CustomProviderConfig struct {
+	APIKey          string                 `json:"api_key" env:"PICOCLAW_PROVIDERS_CUSTOM_{{.Name}}_API_KEY"`
+	APIBase         string                 `json:"api_base" env:"PICOCLAW_PROVIDERS_CUSTOM_{{.Name}}_API_BASE"`
+	Proxy           string                 `json:"proxy,omitempty" env:"PICOCLAW_PROVIDERS_CUSTOM_{{.Name}}_PROXY"`
+	ContextWindow   int                    `json:"context_window" env:"PICOCLAW_PROVIDERS_CUSTOM_{{.Name}}_CONTEXT_WINDOW"`
+	MaxOutputTokens int                    `json:"max_output_tokens" env:"PICOCLAW_PROVIDERS_CUSTOM_{{.Name}}_MAX_OUTPUT_TOKENS"`
+	DefaultModel    string                 `json:"default_model" env:"PICOCLAW_PROVIDERS_CUSTOM_{{.Name}}_DEFAULT_MODEL"`
+}
+
 type ProvidersConfig struct {
-	Anthropic     ProviderConfig `json:"anthropic"`
-	OpenAI        ProviderConfig `json:"openai"`
-	OpenRouter    ProviderConfig `json:"openrouter"`
-	Groq          ProviderConfig `json:"groq"`
-	Zhipu         ProviderConfig `json:"zhipu"`
-	VLLM          ProviderConfig `json:"vllm"`
-	Gemini        ProviderConfig `json:"gemini"`
-	Nvidia        ProviderConfig `json:"nvidia"`
-	Ollama        ProviderConfig `json:"ollama"`
-	Moonshot      ProviderConfig `json:"moonshot"`
-	ShengSuanYun  ProviderConfig `json:"shengsuanyun"`
-	DeepSeek      ProviderConfig `json:"deepseek"`
-	GitHubCopilot ProviderConfig `json:"github_copilot"`
-	MCP           MCPConfig     `json:"mcp"`
+	Anthropic     ProviderConfig   `json:"anthropic"`
+	OpenAI        ProviderConfig   `json:"openai"`
+	OpenRouter    ProviderConfig   `json:"openrouter"`
+	Groq          ProviderConfig   `json:"groq"`
+	Zhipu         ProviderConfig   `json:"zhipu"`
+	VLLM          ProviderConfig   `json:"vllm"`
+	Gemini        ProviderConfig   `json:"gemini"`
+	Nvidia        ProviderConfig   `json:"nvidia"`
+	Ollama        ProviderConfig   `json:"ollama"`
+	Moonshot      ProviderConfig   `json:"moonshot"`
+	ShengSuanYun ProviderConfig   `json:"shengsuanyun"`
+	DeepSeek      ProviderConfig   `json:"deepseek"`
+	GitHubCopilot ProviderConfig   `json:"github_copilot"`
+	Minimax        ProviderConfig   `json:"minimax"`
+	MCP           MCPConfig       `json:"mcp"`
+	Custom        map[string]CustomProviderConfig `json:"custom"`
 }
 
 type MCPServerConfig struct {
@@ -331,11 +342,31 @@ func DefaultConfig() *Config {
 			VLLM:         ProviderConfig{},
 			Gemini:       ProviderConfig{},
 			Nvidia:       ProviderConfig{},
+			Ollama:       ProviderConfig{},
 			Moonshot:     ProviderConfig{},
 			ShengSuanYun: ProviderConfig{},
+			DeepSeek:     ProviderConfig{},
+			Minimax:       ProviderConfig{},
+			GitHubCopilot: ProviderConfig{},
 			MCP: MCPConfig{
 				Servers: make(map[string]MCPServerConfig),
 			},
+			Custom: map[string]CustomProviderConfig{
+			"lealvona-server": {
+				APIKey:        "YOUR_OPENAI_API_KEY",
+				APIBase:       "https://api.openai.com/v1",
+				ContextWindow:  128000,
+				MaxOutputTokens: 16384,
+				DefaultModel:  "gpt-4o",
+			},
+			"minimax": {
+				APIKey:        "YOUR_MINIMAX_API_KEY",
+				APIBase:       "https://api.minimax.chat/v1",
+				ContextWindow:  24576,
+				MaxOutputTokens: 8192,
+				DefaultModel:  "minimax-2.5",
+			},
+		},
 		},
 		Gateway: GatewayConfig{
 			Host: "0.0.0.0",
@@ -464,6 +495,15 @@ func (c *Config) GetAPIBase() string {
 		return c.Providers.VLLM.APIBase
 	}
 	return ""
+}
+
+func (c *Config) GetCustomProvider(name string) *CustomProviderConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if cfg, ok := c.Providers.Custom[name]; ok {
+		return &cfg
+	}
+	return nil
 }
 
 func expandHome(path string) string {

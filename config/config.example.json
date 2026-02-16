@@ -108,6 +108,10 @@
       "api_key": "sk-xxx",
       "api_base": ""
     },
+    "minimax": {
+      "api_key": "YOUR_MINIMAX_API_KEY",
+      "api_base": "https://api.minimax.chat/v1"
+    },
     "ollama": {
        "api_key": "",
        "api_base": "http://localhost:11434/v1"

@@ -357,37 +357,30 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 			}
 			return NewCodexCliProvider(workspace), nil
 		case "deepseek":
-			if cfg.Providers.DeepSeek.APIKey != "" {
-				apiKey = cfg.Providers.DeepSeek.APIKey
+			apiKey = cfg.Providers.DeepSeek.APIKey
+			proxy = cfg.Providers.DeepSeek.Proxy
+			if cfg.Providers.DeepSeek.APIBase != "" {
 				apiBase = cfg.Providers.DeepSeek.APIBase
-				if apiBase == "" {
-					apiBase = "https://api.deepseek.com/v1"
-				}
-				if model != "deepseek-chat" && model != "deepseek-reasoner" {
-					model = "deepseek-chat"
-				}
-			}
-		case "github_copilot", "copilot":
-			if cfg.Providers.GitHubCopilot.APIBase != "" {
-				apiBase = cfg.Providers.GitHubCopilot.APIBase
 			} else {
-				apiBase = "localhost:4321"
+				apiBase = "https://api.deepseek.com"
 			}
-			return NewGitHubCopilotProvider(apiBase, cfg.Providers.GitHubCopilot.ConnectMode, model)
 
-		}
-
-	}
-
-	// Fallback: detect provider from model name
-	if apiKey == "" && apiBase == "" {
-		switch {
-		case (strings.Contains(lowerModel, "kimi") || strings.Contains(lowerModel, "moonshot") || strings.HasPrefix(model, "moonshot/")) && cfg.Providers.Moonshot.APIKey != "":
-			apiKey = cfg.Providers.Moonshot.APIKey
-			apiBase = cfg.Providers.Moonshot.APIBase
-			proxy = cfg.Providers.Moonshot.Proxy
-			if apiBase == "" {
-				apiBase = "https://api.moonshot.cn/v1"
+		case "minimax":
+			if customCfg := cfg.GetCustomProvider("minimax"); customCfg != nil {
+				apiKey = customCfg.APIKey
+				apiBase = customCfg.APIBase
+				proxy = customCfg.Proxy
+				if apiBase == "" {
+					apiBase = "https://api.minimax.chat/v1"
+				}
+			} else {
+				apiKey = cfg.Providers.Minimax.APIKey
+				proxy = cfg.Providers.Minimax.Proxy
+				if cfg.Providers.Minimax.APIBase != "" {
+					apiBase = cfg.Providers.Minimax.APIBase
+				} else {
+					apiBase = "https://api.minimax.chat/v1"
+				}
 			}
 
 		case strings.HasPrefix(model, "openrouter/") || strings.HasPrefix(model, "anthropic/") || strings.HasPrefix(model, "openai/") || strings.HasPrefix(model, "meta-llama/") || strings.HasPrefix(model, "deepseek/") || strings.HasPrefix(model, "google/"):
