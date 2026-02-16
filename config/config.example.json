@@ -109,10 +109,24 @@
       "api_base": ""
     },
     "ollama": {
-      "api_key": "",
-      "api_base": "http://localhost:11434/v1"
-    }
-  },
+       "api_key": "",
+       "api_base": "http://localhost:11434/v1"
+     },
+     "mcp": {
+       "servers": {
+         "github": {
+           "name": "GitHub",
+           "endpoint": "http://localhost:3000/mcp",
+           "enabled": true
+         },
+         "filesystem": {
+           "name": "Filesystem",
+           "endpoint": "http://localhost:3001/mcp",
+           "enabled": true
+         }
+       }
+     }
+   },
   "tools": {
     "web": {
       "search": {

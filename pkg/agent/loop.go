@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/mcp"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
 	"github.com/sipeed/picoclaw/pkg/state"
@@ -83,6 +85,20 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 		registry.Register(searchTool)
 	}
 	registry.Register(tools.NewWebFetchTool(50000))
+
+	// MCP (Model Context Protocol) support
+	mcpClient := mcp.NewMCPClient()
+	for name, serverCfg := range cfg.Providers.MCP.Servers {
+		if serverCfg.Enabled {
+			err := mcpClient.AddServer(name, serverCfg.Endpoint)
+			if err != nil {
+				logger.Printf("Failed to initialize MCP server %s: %v", name, err)
+			} else {
+				logger.Printf("Initialized MCP server: %s", name)
+			}
+		}
+	}
+	registry.Register(tools.NewMCPTool(mcpClient))
 
 	// Hardware tools (I2C, SPI) - Linux only, returns error on other platforms
 	registry.Register(tools.NewI2CTool())

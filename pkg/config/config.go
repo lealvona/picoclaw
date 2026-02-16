@@ -180,6 +180,17 @@ type ProvidersConfig struct {
 	ShengSuanYun  ProviderConfig `json:"shengsuanyun"`
 	DeepSeek      ProviderConfig `json:"deepseek"`
 	GitHubCopilot ProviderConfig `json:"github_copilot"`
+	MCP           MCPConfig     `json:"mcp"`
+}
+
+type MCPServerConfig struct {
+	Name     string `json:"name"`
+	Endpoint string `json:"endpoint"`
+	Enabled  bool   `json:"enabled"`
+}
+
+type MCPConfig struct {
+	Servers map[string]MCPServerConfig `json:"servers"`
 }
 
 type ProviderConfig struct {
@@ -310,6 +321,9 @@ func DefaultConfig() *Config {
 			Nvidia:       ProviderConfig{},
 			Moonshot:     ProviderConfig{},
 			ShengSuanYun: ProviderConfig{},
+			MCP: MCPConfig{
+				Servers: make(map[string]MCPServerConfig),
+			},
 		},
 		Gateway: GatewayConfig{
 			Host: "0.0.0.0",
