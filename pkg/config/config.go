@@ -212,7 +212,12 @@ type WebToolsConfig struct {
 }
 
 type ToolsConfig struct {
-	Web WebToolsConfig `json:"web"`
+	Web     WebToolsConfig `json:"web"`
+	Exec    ExecConfig    `json:"exec"`
+}
+
+type ExecConfig struct {
+	TimeoutSeconds int `json:"timeout_seconds" env:"PICOCLAW_TOOLS_EXEC_TIMEOUT_SECONDS"`
 }
 
 func DefaultConfig() *Config {
@@ -321,6 +326,9 @@ func DefaultConfig() *Config {
 					Enabled:    true,
 					MaxResults: 5,
 				},
+			},
+			Exec: ExecConfig{
+				TimeoutSeconds: 60,
 			},
 		},
 		Heartbeat: HeartbeatConfig{

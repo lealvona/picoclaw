@@ -189,7 +189,7 @@ func TestShellTool_OutputTruncation(t *testing.T) {
 // TestShellTool_RestrictToWorkspace verifies workspace restriction
 func TestShellTool_RestrictToWorkspace(t *testing.T) {
 	tmpDir := t.TempDir()
-	tool := NewExecTool(tmpDir, false)
+	tool := NewExecTool(tmpDir, false, 60)
 	tool.SetRestrictToWorkspace(true)
 
 	ctx := context.Background()

@@ -33,7 +33,7 @@ func NewCronTool(cronService *cron.CronService, executor JobExecutor, msgBus *bu
 		cronService: cronService,
 		executor:    executor,
 		msgBus:      msgBus,
-		execTool:    NewExecTool(workspace, restrict),
+		execTool:    NewExecTool(workspace, restrict, 60), // Default 60 seconds for cron jobs
 	}
 }
 
