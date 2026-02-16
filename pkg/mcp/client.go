@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"sync"
 	"time"
 )
@@ -27,11 +29,15 @@ type MCPResource struct {
 
 // MCPServer represents an MCP server configuration
 type MCPServer struct {
-	Name    string `json:"name"`
-	Endpoint string `json:"endpoint"`
-	Enabled  bool   `json:"enabled"`
-	Tools    []MCPTool    `json:"tools"`
-	Resources []MCPResource `json:"resources"`
+	Name        string                 `json:"name"`
+	Type        string                 `json:"type"` // "remote" or "local"
+	Endpoint    string                 `json:"url,omitempty"`
+	Enabled     bool                   `json:"enabled"`
+	Command     []string               `json:"command,omitempty"`
+	Environment map[string]string        `json:"environment,omitempty"`
+	Headers     map[string]string        `json:"headers,omitempty"`
+	Tools       []MCPTool              `json:"tools"`
+	Resources   []MCPResource           `json:"resources"`
 }
 
 // MCPClient handles communication with MCP servers
@@ -53,8 +59,72 @@ func NewMCPClient() *MCPClIENT {
 	}
 }
 
-// AddServer adds an MCP server to the client
+// AddServer adds an MCP server to the client (legacy method for backward compatibility)
 func (c *MCPClIENT) AddServer(name, endpoint string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	server := &MCPServer{
+		Name:     name,
+		Endpoint: endpoint,
+		Type:     "remote",
+		Enabled:  true,
+	}
+
+	// Discover tools and resources from server
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	tools, err := c.discoverTools(ctx, endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to discover tools from MCP server %s: %w", name, err)
+	}
+	server.Tools = tools
+
+	resources, err := c.discoverResources(ctx, endpoint)
+	if err == nil {
+		server.Resources = resources
+	}
+
+	c.servers[name] = server
+	return nil
+}
+
+// AddServerConfig adds a fully configured MCP server to the client
+func (c *MCPClIENT) AddServerConfig(name string, config *MCPServer) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	server := &MCPServer{
+		Name:        config.Name,
+		Type:        config.Type,
+		Endpoint:    config.Endpoint,
+		Enabled:     config.Enabled,
+		Command:     config.Command,
+		Environment: config.Environment,
+		Headers:     config.Headers,
+	}
+
+	// Only discover tools from remote servers
+	if config.Type == "remote" && config.Endpoint != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+		defer cancel()
+
+		tools, err := c.discoverTools(ctx, config.Endpoint)
+		if err != nil {
+			return fmt.Errorf("failed to discover tools from MCP server %s: %w", name, err)
+		}
+		server.Tools = tools
+
+		resources, err := c.discoverResources(ctx, config.Endpoint)
+		if err == nil {
+			server.Resources = resources
+		}
+	}
+
+	c.servers[name] = server
+	return nil
+}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

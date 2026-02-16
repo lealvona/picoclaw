@@ -184,14 +184,19 @@ type ProvidersConfig struct {
 }
 
 type MCPServerConfig struct {
-	Name     string `json:"name"`
-	Endpoint string `json:"endpoint"`
-	Enabled  bool   `json:"enabled"`
+	Name        string                 `json:"name"`
+	Type        string                 `json:"type"` // "remote" or "local"
+	Endpoint    string                 `json:"url,omitempty"`
+	Enabled     bool                   `json:"enabled"`
+	Command     []string               `json:"command,omitempty"`
+	Environment map[string]string        `json:"environment,omitempty"`
+	Headers     map[string]string        `json:"headers,omitempty"`
 }
 
 type MCPConfig struct {
 	Servers map[string]MCPServerConfig `json:"servers"`
 }
+
 
 type ProviderConfig struct {
 	APIKey      string `json:"api_key" env:"PICOCLAW_PROVIDERS_{{.Name}}_API_KEY"`
@@ -218,8 +223,15 @@ type DuckDuckGoConfig struct {
 }
 
 type WebToolsConfig struct {
-	Brave      BraveConfig      `json:"brave"`
-	DuckDuckGo DuckDuckGoConfig `json:"duckduckgo"`
+	Perplexity PerplexityConfig `json:"perplexity"`
+	Brave       BraveConfig     `json:"brave"`
+	DuckDuckGo  DuckDuckGoConfig `json:"duckduckgo"`
+}
+
+type PerplexityConfig struct {
+	Enabled    bool   `json:"enabled" env:"PICOCLAW_TOOLS_WEB_PERPLEXITY_ENABLED"`
+	APIKey     string `json:"api_key" env:"PICOCLAW_TOOLS_WEB_PERPLEXITY_API_KEY"`
+	MaxResults int    `json:"max_results" env:"PICOCLAW_TOOLS_WEB_PERPLEXITY_MAX_RESULTS"`
 }
 
 type ToolsConfig struct {
@@ -331,6 +343,11 @@ func DefaultConfig() *Config {
 		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{
+				Perplexity: PerplexityConfig{
+					Enabled:    false,
+					APIKey:     "",
+					MaxResults: 5,
+				},
 				Brave: BraveConfig{
 					Enabled:    false,
 					APIKey:     "",

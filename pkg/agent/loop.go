@@ -90,11 +90,11 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 	mcpClient := mcp.NewMCPClient()
 	for name, serverCfg := range cfg.Providers.MCP.Servers {
 		if serverCfg.Enabled {
-			err := mcpClient.AddServer(name, serverCfg.Endpoint)
+			err := mcpClient.AddServerConfig(name, &serverCfg)
 			if err != nil {
 				logger.Printf("Failed to initialize MCP server %s: %v", name, err)
 			} else {
-				logger.Printf("Initialized MCP server: %s", name)
+				logger.Printf("Initialized MCP server: %s (type: %s)", name, serverCfg.Type)
 			}
 		}
 	}
