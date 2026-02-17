@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/sipeed/picoclaw/pkg/constants"
 )
 
 // FlexibleStringSlice is a []string that also accepts JSON numbers,
@@ -264,10 +266,10 @@ func DefaultConfig() *Config {
 				RestrictToWorkspace: true,
 				Provider:            "",
 				Model:               "glm-4.7",
-				MaxTokens:           8192,
-				ContextWindow:       128000,
-				MaxOutputTokens:     4096,
-				Temperature:         0.7,
+				MaxTokens:           0,
+				ContextWindow:       0,
+				MaxOutputTokens:     0,
+				Temperature:         0,
 				MaxToolIterations:   20,
 			},
 		},
@@ -529,7 +531,8 @@ func (c *Config) GetContextWindow() int {
 	if c.Agents.Defaults.MaxTokens > 0 {
 		return c.Agents.Defaults.MaxTokens
 	}
-	return 128000
+	model := c.getEffectiveModelLocked()
+	return constants.GetModelContextWindow(model)
 }
 
 func (c *Config) GetMaxOutputTokens() int {
@@ -538,7 +541,8 @@ func (c *Config) GetMaxOutputTokens() int {
 	if c.Agents.Defaults.MaxOutputTokens > 0 {
 		return c.Agents.Defaults.MaxOutputTokens
 	}
-	return 4096
+	model := c.getEffectiveModelLocked()
+	return constants.GetModelMaxOutputTokens(model)
 }
 
 func (c *Config) GetTemperature() float64 {
@@ -547,7 +551,26 @@ func (c *Config) GetTemperature() float64 {
 	if c.Agents.Defaults.Temperature > 0 {
 		return c.Agents.Defaults.Temperature
 	}
-	return 0.7
+	return constants.DefaultTemperature()
+}
+
+func (c *Config) getEffectiveModelLocked() string {
+	model := c.Agents.Defaults.Model
+	provider := strings.ToLower(c.Agents.Defaults.Provider)
+
+	if cfg, ok := c.Providers.Custom[provider]; ok && cfg.DefaultModel != "" {
+		return cfg.DefaultModel
+	}
+
+	if idx := strings.Index(model, "/"); idx > 0 {
+		prefix := model[:idx]
+		if cfg, ok := c.Providers.Custom[prefix]; ok && cfg.DefaultModel != "" {
+			return cfg.DefaultModel
+		}
+		return model[idx+1:]
+	}
+
+	return model
 }
 
 func expandHome(path string) string {
