@@ -22,27 +22,37 @@ type SubagentTask struct {
 }
 
 type SubagentManager struct {
-	tasks         map[string]*SubagentTask
-	mu            sync.RWMutex
-	provider      providers.LLMProvider
-	defaultModel  string
-	bus           *bus.MessageBus
-	workspace     string
-	tools         *ToolRegistry
-	maxIterations int
-	nextID        int
+	tasks           map[string]*SubagentTask
+	mu              sync.RWMutex
+	provider        providers.LLMProvider
+	defaultModel    string
+	bus             *bus.MessageBus
+	workspace       string
+	tools           *ToolRegistry
+	maxIterations   int
+	nextID          int
+	maxOutputTokens int
+	temperature     float64
 }
 
-func NewSubagentManager(provider providers.LLMProvider, defaultModel, workspace string, bus *bus.MessageBus) *SubagentManager {
+func NewSubagentManager(provider providers.LLMProvider, defaultModel, workspace string, bus *bus.MessageBus, maxOutputTokens int, temperature float64) *SubagentManager {
+	if maxOutputTokens <= 0 {
+		maxOutputTokens = 4096
+	}
+	if temperature <= 0 {
+		temperature = 0.7
+	}
 	return &SubagentManager{
-		tasks:         make(map[string]*SubagentTask),
-		provider:      provider,
-		defaultModel:  defaultModel,
-		bus:           bus,
-		workspace:     workspace,
-		tools:         NewToolRegistry(),
-		maxIterations: 10,
-		nextID:        1,
+		tasks:           make(map[string]*SubagentTask),
+		provider:        provider,
+		defaultModel:    defaultModel,
+		bus:             bus,
+		workspace:       workspace,
+		tools:           NewToolRegistry(),
+		maxIterations:   10,
+		nextID:          1,
+		maxOutputTokens: maxOutputTokens,
+		temperature:     temperature,
 	}
 }
 
@@ -123,6 +133,8 @@ After completing the task, provide a clear summary of what was done.`
 	sm.mu.RLock()
 	tools := sm.tools
 	maxIter := sm.maxIterations
+	maxTokens := sm.maxOutputTokens
+	temp := sm.temperature
 	sm.mu.RUnlock()
 
 	loopResult, err := RunToolLoop(ctx, ToolLoopConfig{
@@ -131,8 +143,8 @@ After completing the task, provide a clear summary of what was done.`
 		Tools:         tools,
 		MaxIterations: maxIter,
 		LLMOptions: map[string]any{
-			"max_tokens":  4096,
-			"temperature": 0.7,
+			"max_tokens":  maxTokens,
+			"temperature": temp,
 		},
 	}, messages, task.OriginChannel, task.OriginChatID)
 
@@ -276,11 +288,12 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]interface{})
 		},
 	}
 
-	// Use RunToolLoop to execute with tools (same as async SpawnTool)
 	sm := t.manager
 	sm.mu.RLock()
 	tools := sm.tools
 	maxIter := sm.maxIterations
+	maxTokens := sm.maxOutputTokens
+	temp := sm.temperature
 	sm.mu.RUnlock()
 
 	loopResult, err := RunToolLoop(ctx, ToolLoopConfig{
@@ -289,8 +302,8 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]interface{})
 		Tools:         tools,
 		MaxIterations: maxIter,
 		LLMOptions: map[string]any{
-			"max_tokens":  4096,
-			"temperature": 0.7,
+			"max_tokens":  maxTokens,
+			"temperature": temp,
 		},
 	}, messages, t.originChannel, t.originChatID)
 

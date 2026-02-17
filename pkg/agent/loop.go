@@ -33,19 +33,21 @@ import (
 )
 
 type AgentLoop struct {
-	bus            *bus.MessageBus
-	provider       providers.LLMProvider
-	workspace      string
-	model          string
-	contextWindow  int // Maximum context window size in tokens
-	maxIterations  int
-	sessions       *session.SessionManager
-	state          *state.Manager
-	contextBuilder *ContextBuilder
-	tools          *tools.ToolRegistry
-	running        atomic.Bool
-	summarizing    sync.Map // Tracks which sessions are currently being summarized
-	channelManager *channels.Manager
+	bus             *bus.MessageBus
+	provider        providers.LLMProvider
+	workspace       string
+	model           string
+	contextWindow   int
+	maxOutputTokens int
+	temperature     float64
+	maxIterations   int
+	sessions        *session.SessionManager
+	state           *state.Manager
+	contextBuilder  *ContextBuilder
+	tools           *tools.ToolRegistry
+	running         atomic.Bool
+	summarizing     sync.Map
+	channelManager  *channels.Manager
 }
 
 // processOptions configures how a message is processed
@@ -126,44 +128,39 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 
 	restrict := cfg.Agents.Defaults.RestrictToWorkspace
 
-	// Create tool registry for main agent
 	toolsRegistry := createToolRegistry(workspace, restrict, cfg, msgBus)
 
-	// Create subagent manager with its own tool registry
-	subagentManager := tools.NewSubagentManager(provider, cfg.Agents.Defaults.Model, workspace, msgBus)
+	subagentManager := tools.NewSubagentManager(provider, cfg.Agents.Defaults.Model, workspace, msgBus, cfg.GetMaxOutputTokens(), cfg.GetTemperature())
 	subagentTools := createToolRegistry(workspace, restrict, cfg, msgBus)
-	// Subagent doesn't need spawn/subagent tools to avoid recursion
 	subagentManager.SetTools(subagentTools)
 
-	// Register spawn tool (for main agent)
 	spawnTool := tools.NewSpawnTool(subagentManager)
 	toolsRegistry.Register(spawnTool)
 
-	// Register subagent tool (synchronous execution)
 	subagentTool := tools.NewSubagentTool(subagentManager)
 	toolsRegistry.Register(subagentTool)
 
 	sessionsManager := session.NewSessionManager(filepath.Join(workspace, "sessions"))
 
-	// Create state manager for atomic state persistence
 	stateManager := state.NewManager(workspace)
 
-	// Create context builder and set tools registry
 	contextBuilder := NewContextBuilder(workspace)
 	contextBuilder.SetToolsRegistry(toolsRegistry)
 
 	return &AgentLoop{
-		bus:            msgBus,
-		provider:       provider,
-		workspace:      workspace,
-		model:          cfg.Agents.Defaults.Model,
-		contextWindow:  cfg.Agents.Defaults.MaxTokens, // Restore context window for summarization
-		maxIterations:  cfg.Agents.Defaults.MaxToolIterations,
-		sessions:       sessionsManager,
-		state:          stateManager,
-		contextBuilder: contextBuilder,
-		tools:          toolsRegistry,
-		summarizing:    sync.Map{},
+		bus:             msgBus,
+		provider:        provider,
+		workspace:       workspace,
+		model:           cfg.Agents.Defaults.Model,
+		contextWindow:   cfg.GetContextWindow(),
+		maxOutputTokens: cfg.GetMaxOutputTokens(),
+		temperature:     cfg.GetTemperature(),
+		maxIterations:   cfg.Agents.Defaults.MaxToolIterations,
+		sessions:        sessionsManager,
+		state:           stateManager,
+		contextBuilder:  contextBuilder,
+		tools:           toolsRegistry,
+		summarizing:     sync.Map{},
 	}
 }
 
@@ -452,19 +449,17 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		// Build tool definitions
 		providerToolDefs := al.tools.ToProviderDefs()
 
-		// Log LLM request details
 		logger.DebugCF("agent", "LLM request",
 			map[string]interface{}{
 				"iteration":         iteration,
 				"model":             al.model,
 				"messages_count":    len(messages),
 				"tools_count":       len(providerToolDefs),
-				"max_tokens":        8192,
-				"temperature":       0.7,
+				"max_tokens":        al.maxOutputTokens,
+				"temperature":       al.temperature,
 				"system_prompt_len": len(messages[0].Content),
 			})
 
-		// Log full messages (detailed)
 		logger.DebugCF("agent", "Full LLM request",
 			map[string]interface{}{
 				"iteration":     iteration,
@@ -475,12 +470,11 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		var response *providers.LLMResponse
 		var err error
 
-		// Retry loop for context/token errors
 		maxRetries := 2
 		for retry := 0; retry <= maxRetries; retry++ {
 			response, err = al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
-				"max_tokens":  8192,
-				"temperature": 0.7,
+				"max_tokens":  al.maxOutputTokens,
+				"temperature": al.temperature,
 			})
 
 			if err == nil {

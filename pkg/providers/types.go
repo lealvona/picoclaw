@@ -50,3 +50,9 @@ type ToolFunctionDefinition struct {
 	Description string                 `json:"description"`
 	Parameters  map[string]interface{} `json:"parameters"`
 }
+
+type ProviderInfo struct {
+	ContextWindow   int
+	MaxOutputTokens int
+	Temperature     float64
+}

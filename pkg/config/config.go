@@ -64,6 +64,8 @@ type AgentDefaults struct {
 	Provider            string  `json:"provider" env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
 	Model               string  `json:"model" env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"`
 	MaxTokens           int     `json:"max_tokens" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
+	ContextWindow       int     `json:"context_window" env:"PICOCLAW_AGENTS_DEFAULTS_CONTEXT_WINDOW"`
+	MaxOutputTokens     int     `json:"max_output_tokens" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_OUTPUT_TOKENS"`
 	Temperature         float64 `json:"temperature" env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
 	MaxToolIterations   int     `json:"max_tool_iterations" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
 }
@@ -263,6 +265,8 @@ func DefaultConfig() *Config {
 				Provider:            "",
 				Model:               "glm-4.7",
 				MaxTokens:           8192,
+				ContextWindow:       128000,
+				MaxOutputTokens:     4096,
 				Temperature:         0.7,
 				MaxToolIterations:   20,
 			},
@@ -504,6 +508,46 @@ func (c *Config) GetCustomProvider(name string) *CustomProviderConfig {
 		return &cfg
 	}
 	return nil
+}
+
+func (c *Config) ListCustomProviders() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	names := make([]string, 0, len(c.Providers.Custom))
+	for name := range c.Providers.Custom {
+		names = append(names, name)
+	}
+	return names
+}
+
+func (c *Config) GetContextWindow() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Agents.Defaults.ContextWindow > 0 {
+		return c.Agents.Defaults.ContextWindow
+	}
+	if c.Agents.Defaults.MaxTokens > 0 {
+		return c.Agents.Defaults.MaxTokens
+	}
+	return 128000
+}
+
+func (c *Config) GetMaxOutputTokens() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Agents.Defaults.MaxOutputTokens > 0 {
+		return c.Agents.Defaults.MaxOutputTokens
+	}
+	return 4096
+}
+
+func (c *Config) GetTemperature() float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Agents.Defaults.Temperature > 0 {
+		return c.Agents.Defaults.Temperature
+	}
+	return 0.7
 }
 
 func expandHome(path string) string {

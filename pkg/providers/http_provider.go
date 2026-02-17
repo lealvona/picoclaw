@@ -263,12 +263,56 @@ func createCodexAuthProvider() (LLMProvider, error) {
 }
 
 func CreateProvider(cfg *config.Config) (LLMProvider, error) {
+	provider, _, err := CreateProviderWithInfo(cfg)
+	return provider, err
+}
+
+func CreateProviderWithInfo(cfg *config.Config) (LLMProvider, *ProviderInfo, error) {
 	model := cfg.Agents.Defaults.Model
 	providerName := strings.ToLower(cfg.Agents.Defaults.Provider)
 
 	var apiKey, apiBase, proxy string
+	var providerInfo ProviderInfo
+
+	providerInfo.ContextWindow = cfg.GetContextWindow()
+	providerInfo.MaxOutputTokens = cfg.GetMaxOutputTokens()
+	providerInfo.Temperature = cfg.GetTemperature()
 
 	lowerModel := strings.ToLower(model)
+
+	if providerName != "" {
+		if customCfg := cfg.GetCustomProvider(providerName); customCfg != nil {
+			apiKey = customCfg.APIKey
+			apiBase = customCfg.APIBase
+			proxy = customCfg.Proxy
+			if customCfg.ContextWindow > 0 {
+				providerInfo.ContextWindow = customCfg.ContextWindow
+			}
+			if customCfg.MaxOutputTokens > 0 {
+				providerInfo.MaxOutputTokens = customCfg.MaxOutputTokens
+			}
+			if customCfg.DefaultModel != "" && (model == "" || model == cfg.Agents.Defaults.Model) {
+				model = customCfg.DefaultModel
+			}
+		}
+	}
+
+	if apiKey == "" && apiBase == "" {
+		if idx := strings.Index(model, "/"); idx > 0 {
+			prefix := model[:idx]
+			if customCfg := cfg.GetCustomProvider(prefix); customCfg != nil {
+				apiKey = customCfg.APIKey
+				apiBase = customCfg.APIBase
+				proxy = customCfg.Proxy
+				if customCfg.ContextWindow > 0 {
+					providerInfo.ContextWindow = customCfg.ContextWindow
+				}
+				if customCfg.MaxOutputTokens > 0 {
+					providerInfo.MaxOutputTokens = customCfg.MaxOutputTokens
+				}
+			}
+		}
+	}
 
 	// First, try to use explicitly configured provider
 	if providerName != "" {
@@ -284,10 +328,11 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		case "openai", "gpt":
 			if cfg.Providers.OpenAI.APIKey != "" || cfg.Providers.OpenAI.AuthMethod != "" {
 				if cfg.Providers.OpenAI.AuthMethod == "codex-cli" {
-					return NewCodexProviderWithTokenSource("", "", CreateCodexCliTokenSource()), nil
+					return NewCodexProviderWithTokenSource("", "", CreateCodexCliTokenSource()), &providerInfo, nil
 				}
 				if cfg.Providers.OpenAI.AuthMethod == "oauth" || cfg.Providers.OpenAI.AuthMethod == "token" {
-					return createCodexAuthProvider()
+					p, err := createCodexAuthProvider()
+					return p, &providerInfo, err
 				}
 				apiKey = cfg.Providers.OpenAI.APIKey
 				apiBase = cfg.Providers.OpenAI.APIBase
@@ -298,7 +343,8 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		case "anthropic", "claude":
 			if cfg.Providers.Anthropic.APIKey != "" || cfg.Providers.Anthropic.AuthMethod != "" {
 				if cfg.Providers.Anthropic.AuthMethod == "oauth" || cfg.Providers.Anthropic.AuthMethod == "token" {
-					return createClaudeAuthProvider()
+					p, err := createClaudeAuthProvider()
+					return p, &providerInfo, err
 				}
 				apiKey = cfg.Providers.Anthropic.APIKey
 				apiBase = cfg.Providers.Anthropic.APIBase
@@ -349,13 +395,13 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 			if workspace == "" {
 				workspace = "."
 			}
-			return NewClaudeCliProvider(workspace), nil
+			return NewClaudeCliProvider(workspace), &providerInfo, nil
 		case "codex-cli", "codex-code":
 			workspace := cfg.WorkspacePath()
 			if workspace == "" {
 				workspace = "."
 			}
-			return NewCodexCliProvider(workspace), nil
+			return NewCodexCliProvider(workspace), &providerInfo, nil
 		case "deepseek":
 			apiKey = cfg.Providers.DeepSeek.APIKey
 			proxy = cfg.Providers.DeepSeek.Proxy
@@ -394,7 +440,8 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 
 		case (strings.Contains(lowerModel, "claude") || strings.HasPrefix(model, "anthropic/")) && (cfg.Providers.Anthropic.APIKey != "" || cfg.Providers.Anthropic.AuthMethod != ""):
 			if cfg.Providers.Anthropic.AuthMethod == "oauth" || cfg.Providers.Anthropic.AuthMethod == "token" {
-				return createClaudeAuthProvider()
+				p, err := createClaudeAuthProvider()
+				return p, &providerInfo, err
 			}
 			apiKey = cfg.Providers.Anthropic.APIKey
 			apiBase = cfg.Providers.Anthropic.APIBase
@@ -405,7 +452,8 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 
 		case (strings.Contains(lowerModel, "gpt") || strings.HasPrefix(model, "openai/")) && (cfg.Providers.OpenAI.APIKey != "" || cfg.Providers.OpenAI.AuthMethod != ""):
 			if cfg.Providers.OpenAI.AuthMethod == "oauth" || cfg.Providers.OpenAI.AuthMethod == "token" {
-				return createCodexAuthProvider()
+				p, err := createCodexAuthProvider()
+				return p, &providerInfo, err
 			}
 			apiKey = cfg.Providers.OpenAI.APIKey
 			apiBase = cfg.Providers.OpenAI.APIBase
@@ -469,18 +517,18 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 					apiBase = "https://openrouter.ai/api/v1"
 				}
 			} else {
-				return nil, fmt.Errorf("no API key configured for model: %s", model)
+				return nil, nil, fmt.Errorf("no API key configured for model: %s", model)
 			}
 		}
 	}
 
 	if apiKey == "" && !strings.HasPrefix(model, "bedrock/") {
-		return nil, fmt.Errorf("no API key configured for provider (model: %s)", model)
+		return nil, nil, fmt.Errorf("no API key configured for provider (model: %s)", model)
 	}
 
 	if apiBase == "" {
-		return nil, fmt.Errorf("no API base configured for provider (model: %s)", model)
+		return nil, nil, fmt.Errorf("no API base configured for provider (model: %s)", model)
 	}
 
-	return NewHTTPProvider(apiKey, apiBase, proxy), nil
+	return NewHTTPProvider(apiKey, apiBase, proxy), &providerInfo, nil
 }
